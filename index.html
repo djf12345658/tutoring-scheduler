@@ -310,12 +310,35 @@
                     <strong>📅 How booking works:</strong><br>
                     After submitting your request, you'll get a Google Calendar link to officially schedule the session. 
                     This ensures the appointment is added to both our calendars with automatic reminders.
+                    <br><br>
+                    <strong>⏰ Current Availability:</strong> Monday-Saturday, 2:00 PM - 9:00 PM<br>
+                    <em>Unavailable time slots are marked as "Booked"</em>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // Configuration - Edit these to match your availability
+        const AVAILABILITY = {
+            // Days of the week you're available (0 = Sunday, 1 = Monday, etc.)
+            availableDays: [1, 2, 3, 4, 5, 6], // Monday through Saturday
+            
+            // Hours you're available (24-hour format)
+            startHour: 14, // 2 PM
+            endHour: 21,   // 9 PM
+            
+            // Manually blocked dates/times (add your existing appointments here)
+            blockedSlots: [
+                // Format: 'YYYY-MM-DD-HH' (24-hour format)
+                // Example: '2025-07-15-16' means July 15, 2025 at 4 PM is blocked
+                '2025-07-15-16',
+                '2025-07-15-17',
+                '2025-07-16-14',
+                '2025-07-20-15'
+            ]
+        };
+
         // Global variables
         let selectedDate = null;
         let selectedTime = null;
@@ -390,9 +413,10 @@
                 dateElement.textContent = day;
                 
                 const cellDate = new Date(year, month, day);
+                const dayOfWeek = cellDate.getDay();
                 
-                // Disable past dates
-                if (cellDate < today.setHours(0, 0, 0, 0)) {
+                // Disable past dates or unavailable days
+                if (cellDate < today.setHours(0, 0, 0, 0) || !AVAILABILITY.availableDays.includes(dayOfWeek)) {
                     dateElement.classList.add('disabled');
                 } else {
                     dateElement.addEventListener('click', () => selectDate(cellDate, dateElement));
@@ -417,15 +441,25 @@
             generateTimeSlots();
         }
 
+        // Check if a time slot is available
+        function isTimeSlotAvailable(date, hour) {
+            const dateStr = date.getFullYear() + '-' + 
+                          String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                          String(date.getDate()).padStart(2, '0') + '-' + 
+                          String(hour).padStart(2, '0');
+            
+            return !AVAILABILITY.blockedSlots.includes(dateStr);
+        }
+
         // Generate time slots
         function generateTimeSlots() {
             if (!selectedDate) return;
             
             timeSlots.innerHTML = '';
             
-            // Generate slots from 9 AM to 8 PM
-            const startHour = 9;
-            const endHour = 20;
+            // Use availability hours from configuration
+            const startHour = AVAILABILITY.startHour;
+            const endHour = AVAILABILITY.endHour;
             
             for (let hour = startHour; hour < endHour; hour++) {
                 // Check if slot has enough time for selected duration
@@ -436,9 +470,21 @@
                 const slotElement = document.createElement('div');
                 slotElement.className = 'time-slot';
                 slotElement.textContent = timeString;
-                slotElement.addEventListener('click', () => selectTimeSlot(hour, slotElement));
+                
+                // Check if this time slot is available
+                if (!isTimeSlotAvailable(selectedDate, hour)) {
+                    slotElement.classList.add('unavailable');
+                    slotElement.textContent += ' (Booked)';
+                } else {
+                    slotElement.addEventListener('click', () => selectTimeSlot(hour, slotElement));
+                }
                 
                 timeSlots.appendChild(slotElement);
+            }
+            
+            // Show availability info
+            if (timeSlots.children.length === 0) {
+                timeSlots.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No available slots for this date</div>';
             }
         }
 
