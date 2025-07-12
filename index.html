@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dennis Fleysh - Tutoring Scheduler</title>
-    <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <style>
         * {
             margin: 0;
@@ -51,37 +49,8 @@
             padding: 40px;
         }
         
-        .auth-section {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .connect-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 50px;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .connect-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-        }
-        
-        .connect-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
         .booking-section {
-            display: none;
+            display: block;
         }
         
         .form-group {
@@ -268,6 +237,16 @@
             color: white;
             border-color: #667eea;
         }
+
+        .calendar-link-info {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #1565c0;
+        }
     </style>
 </head>
 <body>
@@ -278,10 +257,6 @@
         </div>
         
         <div class="main-content">
-            <div class="auth-section">
-                <button id="connectBtn" class="connect-btn">Connect Google Calendar</button>
-            </div>
-            
             <div id="statusMessage" class="status-message" style="display: none;"></div>
             
             <div id="bookingSection" class="booking-section">
@@ -330,131 +305,34 @@
                     
                     <button type="submit" id="bookBtn" class="book-btn">Book Session</button>
                 </form>
+                
+                <div class="calendar-link-info">
+                    <strong>📅 How booking works:</strong><br>
+                    After submitting your request, you'll get a Google Calendar link to officially schedule the session. 
+                    This ensures the appointment is added to both our calendars with automatic reminders.
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Configuration
-        const CONFIG = {
-            CLIENT_ID: '1051895599424-fkfngqvjj5ordeburs0oiegh1gvun09d.apps.googleusercontent.com',
-            API_KEY: 'AIzaSyASWEQ9VH9D_MXeC8MfHTh1KY5zO-CIUl8',
-            DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
-            SCOPES: 'https://www.googleapis.com/auth/calendar'
-        };
-
         // Global variables
-        let gapi;
-        let tokenClient;
-        let isSignedIn = false;
         let selectedDate = null;
         let selectedTime = null;
         let selectedDuration = 90;
-        let busyTimes = [];
-        let gapiLoaded = false;
-        let gisLoaded = false;
 
         // DOM elements
-        const connectBtn = document.getElementById('connectBtn');
         const statusMessage = document.getElementById('statusMessage');
-        const bookingSection = document.getElementById('bookingSection');
         const datePicker = document.getElementById('datePicker');
         const timeSlots = document.getElementById('timeSlots');
         const bookBtn = document.getElementById('bookBtn');
         const bookingForm = document.getElementById('bookingForm');
-
-        // Initialize when Google APIs are loaded
-        window.gapiLoaded = () => {
-            console.log('GAPI loaded');
-            gapiLoaded = true;
-            maybeEnableButtons();
-        };
-
-        window.gisLoaded = () => {
-            console.log('GIS loaded');
-            gisLoaded = true;
-            maybeEnableButtons();
-        };
-
-        function maybeEnableButtons() {
-            if (gapiLoaded && gisLoaded) {
-                console.log('Both APIs loaded, initializing...');
-                initializeGoogleServices();
-            }
-        }
-
-        async function initializeGoogleServices() {
-            try {
-                await gapi.client.init({
-                    apiKey: CONFIG.API_KEY,
-                    discoveryDocs: [CONFIG.DISCOVERY_DOC]
-                });
-
-                tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: CONFIG.CLIENT_ID,
-                    scope: CONFIG.SCOPES,
-                    callback: handleAuthCallback,
-                });
-
-                console.log('Google services initialized successfully');
-                connectBtn.addEventListener('click', handleAuth);
-                
-            } catch (error) {
-                console.error('Error initializing Google services:', error);
-                showStatus('Failed to initialize Google Calendar. Please refresh and try again.', 'error');
-            }
-        }
 
         // Initialize the app
         function initializeApp() {
             setupDurationSelector();
             setupCalendar();
             setupForm();
-        }
-
-        // Handle authentication
-        function handleAuth() {
-            if (!tokenClient) {
-                showStatus('Google Calendar is still loading. Please wait a moment...', 'loading');
-                setTimeout(() => {
-                    if (tokenClient) {
-                        handleAuth();
-                    } else {
-                        showStatus('Unable to connect to Google Calendar. Please refresh the page.', 'error');
-                    }
-                }, 2000);
-                return;
-            }
-            
-            showStatus('Connecting to Google Calendar...', 'loading');
-            connectBtn.disabled = true;
-            
-            try {
-                tokenClient.requestAccessToken({prompt: 'consent'});
-            } catch (error) {
-                console.error('Auth error:', error);
-                showStatus('Authentication failed. Please try again.', 'error');
-                connectBtn.disabled = false;
-            }
-        }
-
-        // Handle auth callback
-        async function handleAuthCallback(resp) {
-            if (resp.error !== undefined) {
-                showStatus('Authentication failed. Please try again.', 'error');
-                connectBtn.disabled = false;
-                return;
-            }
-            
-            isSignedIn = true;
-            showStatus('Successfully connected to Google Calendar!', 'success');
-            connectBtn.textContent = 'Connected ✓';
-            connectBtn.style.background = '#28a745';
-            bookingSection.style.display = 'block';
-            
-            // Load busy times for the current month
-            await loadBusyTimes();
-            generateTimeSlots();
         }
 
         // Setup duration selector
@@ -517,7 +395,7 @@
                 if (cellDate < today.setHours(0, 0, 0, 0)) {
                     dateElement.classList.add('disabled');
                 } else {
-                    dateElement.addEventListener('click', () => selectDate(cellDate));
+                    dateElement.addEventListener('click', () => selectDate(cellDate, dateElement));
                 }
                 
                 datePicker.appendChild(dateElement);
@@ -525,7 +403,7 @@
         }
 
         // Select date
-        async function selectDate(date) {
+        function selectDate(date, element) {
             selectedDate = date;
             
             // Update UI
@@ -533,53 +411,10 @@
                 cell.classList.remove('selected');
             });
             
-            event.target.classList.add('selected');
+            element.classList.add('selected');
             
-            // Reload busy times for better accuracy and generate time slots
-            await loadBusyTimes();
+            // Generate time slots for selected date
             generateTimeSlots();
-        }
-
-        // Load busy times from Google Calendar
-        async function loadBusyTimes() {
-            try {
-                const now = new Date();
-                const timeMin = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-                const timeMax = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString();
-                
-                const response = await gapi.client.calendar.events.list({
-                    calendarId: 'primary',
-                    timeMin: timeMin,
-                    timeMax: timeMax,
-                    singleEvents: true,
-                    orderBy: 'startTime'
-                });
-                
-                busyTimes = response.result.items || [];
-                console.log('Loaded busy times:', busyTimes);
-            } catch (error) {
-                console.error('Error loading busy times:', error);
-                busyTimes = [];
-            }
-        }
-
-        // Check if a time slot conflicts with existing events
-        function isTimeSlotAvailable(date, hour, duration) {
-            const slotStart = new Date(date);
-            slotStart.setHours(hour, 0, 0, 0);
-            
-            const slotEnd = new Date(slotStart);
-            slotEnd.setMinutes(slotEnd.getMinutes() + duration);
-            
-            return !busyTimes.some(event => {
-                if (!event.start || !event.end) return false;
-                
-                const eventStart = new Date(event.start.dateTime || event.start.date);
-                const eventEnd = new Date(event.end.dateTime || event.end.date);
-                
-                // Check for overlap
-                return (slotStart < eventEnd && slotEnd > eventStart);
-            });
         }
 
         // Generate time slots
@@ -601,16 +436,7 @@
                 const slotElement = document.createElement('div');
                 slotElement.className = 'time-slot';
                 slotElement.textContent = timeString;
-                
-                // Check availability against real calendar
-                const isAvailable = isTimeSlotAvailable(selectedDate, hour, selectedDuration);
-                
-                if (!isAvailable) {
-                    slotElement.classList.add('unavailable');
-                    slotElement.textContent += ' (Booked)';
-                } else {
-                    slotElement.addEventListener('click', () => selectTimeSlot(hour, slotElement));
-                }
+                slotElement.addEventListener('click', () => selectTimeSlot(hour, slotElement));
                 
                 timeSlots.appendChild(slotElement);
             }
@@ -660,84 +486,52 @@
                 duration: selectedDuration
             };
             
-            // Simulate booking process
-            showStatus('Booking your session...', 'loading');
-            bookBtn.disabled = true;
-            
-            setTimeout(() => {
-                createCalendarEvent(bookingData);
-            }, 2000);
+            createCalendarEvent(bookingData);
         }
 
         // Create calendar event
-        async function createCalendarEvent(bookingData) {
-            try {
-                const startTime = new Date(bookingData.date);
-                startTime.setHours(bookingData.time, 0, 0, 0);
-                
-                const endTime = new Date(startTime);
-                endTime.setMinutes(endTime.getMinutes() + bookingData.duration);
-                
-                const event = {
-                    summary: `Tutoring Session - ${bookingData.subject}`,
-                    description: `Student: ${bookingData.studentName}\nEmail: ${bookingData.studentEmail}\nSubject: ${bookingData.subject}\nNotes: ${bookingData.notes}`,
-                    start: {
-                        dateTime: startTime.toISOString(),
-                        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-                    },
-                    end: {
-                        dateTime: endTime.toISOString(),
-                        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-                    },
-                    attendees: [
-                        {email: bookingData.studentEmail}
-                    ],
-                    reminders: {
-                        useDefault: false,
-                        overrides: [
-                            {method: 'email', minutes: 24 * 60}, // 1 day before
-                            {method: 'popup', minutes: 30}       // 30 minutes before
-                        ]
-                    }
-                };
-                
-                const response = await gapi.client.calendar.events.insert({
-                    calendarId: 'primary',
-                    resource: event,
-                    sendUpdates: 'all'
-                });
-                
-                console.log('Event created:', response);
-                showStatus(`Session booked successfully! Calendar event created and confirmation emails sent.`, 'success');
-                
-                // Refresh busy times and reset form
-                await loadBusyTimes();
-                bookBtn.disabled = false;
+        function createCalendarEvent(bookingData) {
+            const startTime = new Date(bookingData.date);
+            startTime.setHours(bookingData.time, 0, 0, 0);
+            
+            const endTime = new Date(startTime);
+            endTime.setMinutes(endTime.getMinutes() + bookingData.duration);
+            
+            // Format dates for Google Calendar URL
+            const formatDateForGoogle = (date) => {
+                return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+            };
+            
+            // Create Google Calendar event URL
+            const eventTitle = `Tutoring Session - ${bookingData.subject}`;
+            const eventDescription = `Student: ${bookingData.studentName}%0AEmail: ${bookingData.studentEmail}%0ASubject: ${bookingData.subject}%0ANotes: ${bookingData.notes || 'None'}`;
+            const startTimeFormatted = formatDateForGoogle(startTime);
+            const endTimeFormatted = formatDateForGoogle(endTime);
+            
+            const calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventTitle)}&dates=${startTimeFormatted}/${endTimeFormatted}&details=${eventDescription}&add=${encodeURIComponent(bookingData.studentEmail)}`;
+            
+            showStatus('Opening Google Calendar to complete your booking...', 'success');
+            
+            // Open Google Calendar in new tab
+            window.open(calendarUrl, '_blank');
+            
+            // Reset form after a delay
+            setTimeout(() => {
                 bookingForm.reset();
                 selectedDate = null;
                 selectedTime = null;
                 document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
                 document.querySelector('.duration-option[data-duration="90"]').classList.add('selected');
-                generateTimeSlots();
-                
-            } catch (error) {
-                console.error('Error creating calendar event:', error);
-                showStatus('Failed to book session. Please try again or contact support.', 'error');
-                bookBtn.disabled = false;
-            }
+                showStatus('', '');
+                statusMessage.style.display = 'none';
+            }, 3000);
         }
 
         // Show status message
         function showStatus(message, type) {
             statusMessage.textContent = message;
             statusMessage.className = `status-message ${type}`;
-            statusMessage.style.display = 'block';
-            
-            if (type === 'success') {
-                setTimeout(() => {
-                    statusMessage.style.display = 'none';
-                }, 5000);
-            }
+            statusMessage.style.display = message ? 'block' : 'none';
         }
 
         // Initialize the app when DOM is loaded
