@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tutoring Scheduler</title>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            padding: 40px;
+        }
+        
+        .auth-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .connect-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .connect-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .connect-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .booking-section {
+            display: none;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .time-slots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .time-slot {
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .time-slot:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+        
+        .time-slot.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .time-slot.unavailable {
+            background: #f8f9fa;
+            color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        .book-btn {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 20px;
+        }
+        
+        .book-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(86, 171, 47, 0.4);
+        }
+        
+        .book-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status-message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .calendar-section {
+            margin-bottom: 30px;
+        }
+        
+        .date-picker {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            margin-top: 15px;
+        }
+        
+        .date-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+        
+        .date-cell:hover {
+            background: #f8f9fa;
+        }
+        
+        .date-cell.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .date-cell.disabled {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .day-header {
+            font-weight: 600;
+            color: #666;
+            background: #f8f9fa;
+            cursor: default;
+        }
+        
+        .duration-selector {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .duration-option {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .duration-option:hover {
+            border-color: #667eea;
+        }
+        
+        .duration-option.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Tutoring Scheduler</h1>
+            <p>Book your personalized tutoring session</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="auth-section">
+                <button id="connectBtn" class="connect-btn">Connect Google Calendar</button>
+            </div>
+            
+            <div id="statusMessage" class="status-message" style="display: none;"></div>
+            
+            <div id="bookingSection" class="booking-section">
+                <form id="bookingForm">
+                    <div class="form-group">
+                        <label for="studentName">Student Name</label>
+                        <input type="text" id="studentName" name="studentName" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="studentEmail">Email Address</label>
+                        <input type="email" id="studentEmail" name="studentEmail" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="subject">Subject/Topic</label>
+                        <input type="text" id="subject" name="subject" placeholder="e.g., Math, Physics, SAT Prep" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Session Duration</label>
+                        <div class="duration-selector">
+                            <div class="duration-option" data-duration="60">1 Hour</div>
+                            <div class="duration-option selected" data-duration="90">1.5 Hours</div>
+                        </div>
+                    </div>
+                    
+                    <div class="calendar-section">
+                        <label>Select Date</label>
+                        <div id="datePicker" class="date-picker"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Available Time Slots</label>
+                        <div id="timeSlots" class="time-slots"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="notes">Additional Notes (Optional)</label>
+                        <textarea id="notes" name="notes" rows="3" placeholder="Any specific topics you'd like to focus on or questions you have..."></textarea>
+                    </div>
+                    
+                    <button type="submit" id="bookBtn" class="book-btn">Book Session</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            CLIENT_ID: 'your-google-client-id-here',
+            API_KEY: 'your-google-api-key-here',
+            DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
+            SCOPES: 'https://www.googleapis.com/auth/calendar'
+        };
+
+        // Global variables
+        let gapi;
+        let isSignedIn = false;
+        let selectedDate = null;
+        let selectedTime = null;
+        let selectedDuration = 90;
+
+        // DOM elements
+        const connectBtn = document.getElementById('connectBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const bookingSection = document.getElementById('bookingSection');
+        const datePicker = document.getElementById('datePicker');
+        const timeSlots = document.getElementById('timeSlots');
+        const bookBtn = document.getElementById('bookBtn');
+        const bookingForm = document.getElementById('bookingForm');
+
+        // Initialize the app
+        function initializeApp() {
+            // For demo purposes, we'll simulate the Google API
+            connectBtn.addEventListener('click', handleAuth);
+            setupDurationSelector();
+            setupCalendar();
+            setupForm();
+        }
+
+        // Handle authentication
+        function handleAuth() {
+            showStatus('Connecting to Google Calendar...', 'loading');
+            connectBtn.disabled = true;
+            
+            // Simulate authentication process
+            setTimeout(() => {
+                isSignedIn = true;
+                showStatus('Successfully connected to Google Calendar!', 'success');
+                connectBtn.textContent = 'Connected ✓';
+                connectBtn.style.background = '#28a745';
+                bookingSection.style.display = 'block';
+                generateTimeSlots();
+            }, 2000);
+        }
+
+        // Setup duration selector
+        function setupDurationSelector() {
+            const durationOptions = document.querySelectorAll('.duration-option');
+            durationOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    durationOptions.forEach(opt => opt.classList.remove('selected'));
+                    option.classList.add('selected');
+                    selectedDuration = parseInt(option.dataset.duration);
+                    generateTimeSlots();
+                });
+            });
+        }
+
+        // Setup calendar
+        function setupCalendar() {
+            const today = new Date();
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+            
+            generateCalendar(currentYear, currentMonth);
+        }
+
+        // Generate calendar
+        function generateCalendar(year, month) {
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startingDayOfWeek = firstDay.getDay();
+            
+            datePicker.innerHTML = '';
+            
+            // Add day headers
+            const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            dayHeaders.forEach(day => {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'date-cell day-header';
+                dayElement.textContent = day;
+                datePicker.appendChild(dayElement);
+            });
+            
+            // Add empty cells for days before month starts
+            for (let i = 0; i < startingDayOfWeek; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'date-cell disabled';
+                datePicker.appendChild(emptyCell);
+            }
+            
+            // Add days of the month
+            const today = new Date();
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateElement = document.createElement('div');
+                dateElement.className = 'date-cell';
+                dateElement.textContent = day;
+                
+                const cellDate = new Date(year, month, day);
+                
+                // Disable past dates
+                if (cellDate < today.setHours(0, 0, 0, 0)) {
+                    dateElement.classList.add('disabled');
+                } else {
+                    dateElement.addEventListener('click', () => selectDate(cellDate));
+                }
+                
+                datePicker.appendChild(dateElement);
+            }
+        }
+
+        // Select date
+        function selectDate(date) {
+            selectedDate = date;
+            
+            // Update UI
+            document.querySelectorAll('.date-cell').forEach(cell => {
+                cell.classList.remove('selected');
+            });
+            
+            event.target.classList.add('selected');
+            
+            // Generate time slots for selected date
+            generateTimeSlots();
+        }
+
+        // Generate time slots
+        function generateTimeSlots() {
+            if (!selectedDate) return;
+            
+            timeSlots.innerHTML = '';
+            
+            // Generate slots from 9 AM to 8 PM
+            const startHour = 9;
+            const endHour = 20;
+            
+            for (let hour = startHour; hour < endHour; hour++) {
+                // Check if slot has enough time for selected duration
+                const remainingTime = (endHour - hour) * 60;
+                if (remainingTime < selectedDuration) break;
+                
+                const timeString = formatTime(hour);
+                const slotElement = document.createElement('div');
+                slotElement.className = 'time-slot';
+                slotElement.textContent = timeString;
+                
+                // Simulate some unavailable slots
+                const isUnavailable = Math.random() < 0.3;
+                if (isUnavailable) {
+                    slotElement.classList.add('unavailable');
+                    slotElement.textContent += ' (Booked)';
+                } else {
+                    slotElement.addEventListener('click', () => selectTimeSlot(hour, slotElement));
+                }
+                
+                timeSlots.appendChild(slotElement);
+            }
+        }
+
+        // Select time slot
+        function selectTimeSlot(hour, element) {
+            selectedTime = hour;
+            
+            // Update UI
+            document.querySelectorAll('.time-slot').forEach(slot => {
+                slot.classList.remove('selected');
+            });
+            
+            element.classList.add('selected');
+        }
+
+        // Format time
+        function formatTime(hour) {
+            const period = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour > 12 ? hour - 12 : hour;
+            return `${displayHour}:00 ${period}`;
+        }
+
+        // Setup form
+        function setupForm() {
+            bookingForm.addEventListener('submit', handleBooking);
+        }
+
+        // Handle booking
+        function handleBooking(e) {
+            e.preventDefault();
+            
+            if (!selectedDate || selectedTime === null) {
+                showStatus('Please select a date and time slot.', 'error');
+                return;
+            }
+            
+            const formData = new FormData(bookingForm);
+            const bookingData = {
+                studentName: formData.get('studentName'),
+                studentEmail: formData.get('studentEmail'),
+                subject: formData.get('subject'),
+                notes: formData.get('notes'),
+                date: selectedDate,
+                time: selectedTime,
+                duration: selectedDuration
+            };
+            
+            // Simulate booking process
+            showStatus('Booking your session...', 'loading');
+            bookBtn.disabled = true;
+            
+            setTimeout(() => {
+                createCalendarEvent(bookingData);
+            }, 2000);
+        }
+
+        // Create calendar event
+        function createCalendarEvent(bookingData) {
+            // In a real implementation, this would use the Google Calendar API
+            const startTime = new Date(bookingData.date);
+            startTime.setHours(bookingData.time, 0, 0, 0);
+            
+            const endTime = new Date(startTime);
+            endTime.setMinutes(endTime.getMinutes() + bookingData.duration);
+            
+            const eventDetails = {
+                summary: `Tutoring Session - ${bookingData.subject}`,
+                description: `Student: ${bookingData.studentName}\nEmail: ${bookingData.studentEmail}\nSubject: ${bookingData.subject}\nNotes: ${bookingData.notes}`,
+                start: startTime,
+                end: endTime,
+                attendees: [bookingData.studentEmail]
+            };
+            
+            // Simulate successful booking
+            showStatus(`Session booked successfully! You'll receive a confirmation email shortly.`, 'success');
+            bookBtn.disabled = false;
+            
+            // Reset form
+            bookingForm.reset();
+            selectedDate = null;
+            selectedTime = null;
+            document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+            document.querySelector('.duration-option[data-duration="90"]').classList.add('selected');
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+            statusMessage.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusMessage.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>
