@@ -362,61 +362,76 @@
         const bookingForm = document.getElementById('bookingForm');
 
         // Initialize the app
-        async function initializeApp() {
+        function initializeApp() {
+            setupDurationSelector();
+            setupCalendar();
+            setupForm();
+            
+            // Set up auth button
+            connectBtn.addEventListener('click', handleAuth);
+            
+            // Load Google APIs
+            loadGoogleAPIs();
+        }
+
+        // Load Google APIs with better error handling
+        function loadGoogleAPIs() {
+            // Wait for gapi to be available
+            const waitForGapi = () => {
+                if (typeof gapi !== 'undefined') {
+                    gapi.load('client', initializeGoogleClient);
+                } else {
+                    setTimeout(waitForGapi, 100);
+                }
+            };
+            waitForGapi();
+        }
+
+        // Initialize Google Client
+        async function initializeGoogleClient() {
             try {
-                await loadGoogleAPI();
-                setupDurationSelector();
-                setupCalendar();
-                setupForm();
+                await gapi.client.init({
+                    apiKey: CONFIG.API_KEY,
+                    discoveryDocs: [CONFIG.DISCOVERY_DOC]
+                });
+                
+                // Wait for Google Identity Services
+                const waitForGoogle = () => {
+                    if (typeof google !== 'undefined' && google.accounts) {
+                        tokenClient = google.accounts.oauth2.initTokenClient({
+                            client_id: CONFIG.CLIENT_ID,
+                            scope: CONFIG.SCOPES,
+                            callback: handleAuthCallback,
+                        });
+                        console.log('Google APIs loaded successfully');
+                    } else {
+                        setTimeout(waitForGoogle, 100);
+                    }
+                };
+                waitForGoogle();
+                
             } catch (error) {
-                console.error('Failed to initialize app:', error);
+                console.error('Error initializing Google client:', error);
                 showStatus('Failed to load Google Calendar integration. Please refresh the page.', 'error');
             }
         }
 
-        // Load Google API
-        function loadGoogleAPI() {
-            return new Promise((resolve, reject) => {
-                // Wait for both APIs to load
-                const checkAPIs = () => {
-                    if (typeof gapi !== 'undefined' && typeof google !== 'undefined') {
-                        gapi.load('client', async () => {
-                            try {
-                                await gapi.client.init({
-                                    apiKey: CONFIG.API_KEY,
-                                    discoveryDocs: [CONFIG.DISCOVERY_DOC]
-                                });
-                                
-                                // Initialize Google Identity Services
-                                tokenClient = google.accounts.oauth2.initTokenClient({
-                                    client_id: CONFIG.CLIENT_ID,
-                                    scope: CONFIG.SCOPES,
-                                    callback: handleAuthCallback,
-                                });
-                                
-                                connectBtn.addEventListener('click', handleAuth);
-                                resolve();
-                            } catch (error) {
-                                reject(error);
-                            }
-                        });
-                    } else {
-                        setTimeout(checkAPIs, 100);
-                    }
-                };
-                checkAPIs();
-            });
-        }
-
         // Handle authentication
         function handleAuth() {
+            if (!tokenClient) {
+                showStatus('Google Calendar integration is still loading. Please wait a moment and try again.', 'error');
+                return;
+            }
+            
             showStatus('Connecting to Google Calendar...', 'loading');
             connectBtn.disabled = true;
             
-            if (gapi.client.getToken() === null) {
+            try {
                 tokenClient.requestAccessToken({prompt: 'consent'});
-            } else {
-                tokenClient.requestAccessToken({prompt: ''});
+            } catch (error) {
+                console.error('Auth error:', error);
+                showStatus('Authentication failed. Please refresh the page and try again.', 'error');
+                connectBtn.disabled = false;
             }
         }
 
