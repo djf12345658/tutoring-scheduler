@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tutoring Scheduler</title>
+    <title>Dennis Fleysh - Tutoring Scheduler</title>
     <script src="https://apis.google.com/js/api.js"></script>
     <style>
         * {
@@ -272,8 +272,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📚 Tutoring Scheduler</h1>
-            <p>Book your personalized tutoring session</p>
+            <h1>📚 Dennis Fleysh - Tutoring</h1>
+            <p>Expert Math & English SAT Preparation</p>
         </div>
         
         <div class="main-content">
@@ -296,8 +296,12 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="subject">Subject/Topic</label>
-                        <input type="text" id="subject" name="subject" placeholder="e.g., Math, Physics, SAT Prep" required>
+                        <label for="subject">Subject</label>
+                        <select id="subject" name="subject" required>
+                            <option value="">Select a subject</option>
+                            <option value="Math SAT">Math SAT</option>
+                            <option value="English SAT">English SAT</option>
+                        </select>
                     </div>
                     
                     <div class="form-group">
@@ -332,18 +336,20 @@
     <script>
         // Configuration
         const CONFIG = {
-            CLIENT_ID: 'your-google-client-id-here',
-            API_KEY: 'your-google-api-key-here',
+            CLIENT_ID: '1051895599424-fkfngqvjj5ordeburs0oiegh1gvun09d.apps.googleusercontent.com',
+            API_KEY: 'AIzaSyASWEQ9VH9D_MXeC8MfHTh1KY5zO-CIUl8',
             DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
             SCOPES: 'https://www.googleapis.com/auth/calendar'
         };
 
         // Global variables
         let gapi;
+        let tokenClient;
         let isSignedIn = false;
         let selectedDate = null;
         let selectedTime = null;
         let selectedDuration = 90;
+        let busyTimes = [];
 
         // DOM elements
         const connectBtn = document.getElementById('connectBtn');
@@ -355,12 +361,62 @@
         const bookingForm = document.getElementById('bookingForm');
 
         // Initialize the app
-        function initializeApp() {
-            // For demo purposes, we'll simulate the Google API
-            connectBtn.addEventListener('click', handleAuth);
-            setupDurationSelector();
-            setupCalendar();
-            setupForm();
+        async function initializeApp() {
+            try {
+                await loadGoogleAPI();
+                setupDurationSelector();
+                setupCalendar();
+                setupForm();
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+                showStatus('Failed to load Google Calendar integration. Please refresh the page.', 'error');
+            }
+        }
+
+        // Load Google API
+        function loadGoogleAPI() {
+            return new Promise((resolve, reject) => {
+                if (typeof gapi !== 'undefined') {
+                    resolve();
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = 'https://apis.google.com/js/api.js';
+                script.onload = () => {
+                    gapi.load('client:auth2', async () => {
+                        try {
+                            await gapi.client.init({
+                                apiKey: CONFIG.API_KEY,
+                                clientId: CONFIG.CLIENT_ID,
+                                discoveryDocs: [CONFIG.DISCOVERY_DOC],
+                                scope: CONFIG.SCOPES
+                            });
+                            
+                            // Initialize Google Identity Services
+                            tokenClient = google.accounts.oauth2.initTokenClient({
+                                client_id: CONFIG.CLIENT_ID,
+                                scope: CONFIG.SCOPES,
+                                callback: handleAuthCallback,
+                            });
+                            
+                            connectBtn.addEventListener('click', handleAuth);
+                            resolve();
+                        } catch (error) {
+                            reject(error);
+                        }
+                    });
+                };
+                script.onerror = reject;
+                document.head.appendChild(script);
+                
+                // Load Google Identity Services
+                const gisScript = document.createElement('script');
+                gisScript.src = 'https://accounts.google.com/gsi/client';
+                gisScript.async = true;
+                gisScript.defer = true;
+                document.head.appendChild(gisScript);
+            });
         }
 
         // Handle authentication
@@ -368,15 +424,30 @@
             showStatus('Connecting to Google Calendar...', 'loading');
             connectBtn.disabled = true;
             
-            // Simulate authentication process
-            setTimeout(() => {
-                isSignedIn = true;
-                showStatus('Successfully connected to Google Calendar!', 'success');
-                connectBtn.textContent = 'Connected ✓';
-                connectBtn.style.background = '#28a745';
-                bookingSection.style.display = 'block';
-                generateTimeSlots();
-            }, 2000);
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+
+        // Handle auth callback
+        async function handleAuthCallback(resp) {
+            if (resp.error !== undefined) {
+                showStatus('Authentication failed. Please try again.', 'error');
+                connectBtn.disabled = false;
+                return;
+            }
+            
+            isSignedIn = true;
+            showStatus('Successfully connected to Google Calendar!', 'success');
+            connectBtn.textContent = 'Connected ✓';
+            connectBtn.style.background = '#28a745';
+            bookingSection.style.display = 'block';
+            
+            // Load busy times for the current month
+            await loadBusyTimes();
+            generateTimeSlots();
         }
 
         // Setup duration selector
@@ -447,7 +518,7 @@
         }
 
         // Select date
-        function selectDate(date) {
+        async function selectDate(date) {
             selectedDate = date;
             
             // Update UI
@@ -457,8 +528,51 @@
             
             event.target.classList.add('selected');
             
-            // Generate time slots for selected date
+            // Reload busy times for better accuracy and generate time slots
+            await loadBusyTimes();
             generateTimeSlots();
+        }
+
+        // Load busy times from Google Calendar
+        async function loadBusyTimes() {
+            try {
+                const now = new Date();
+                const timeMin = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+                const timeMax = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString();
+                
+                const response = await gapi.client.calendar.events.list({
+                    calendarId: 'primary',
+                    timeMin: timeMin,
+                    timeMax: timeMax,
+                    singleEvents: true,
+                    orderBy: 'startTime'
+                });
+                
+                busyTimes = response.result.items || [];
+                console.log('Loaded busy times:', busyTimes);
+            } catch (error) {
+                console.error('Error loading busy times:', error);
+                busyTimes = [];
+            }
+        }
+
+        // Check if a time slot conflicts with existing events
+        function isTimeSlotAvailable(date, hour, duration) {
+            const slotStart = new Date(date);
+            slotStart.setHours(hour, 0, 0, 0);
+            
+            const slotEnd = new Date(slotStart);
+            slotEnd.setMinutes(slotEnd.getMinutes() + duration);
+            
+            return !busyTimes.some(event => {
+                if (!event.start || !event.end) return false;
+                
+                const eventStart = new Date(event.start.dateTime || event.start.date);
+                const eventEnd = new Date(event.end.dateTime || event.end.date);
+                
+                // Check for overlap
+                return (slotStart < eventEnd && slotEnd > eventStart);
+            });
         }
 
         // Generate time slots
@@ -481,9 +595,10 @@
                 slotElement.className = 'time-slot';
                 slotElement.textContent = timeString;
                 
-                // Simulate some unavailable slots
-                const isUnavailable = Math.random() < 0.3;
-                if (isUnavailable) {
+                // Check availability against real calendar
+                const isAvailable = isTimeSlotAvailable(selectedDate, hour, selectedDuration);
+                
+                if (!isAvailable) {
                     slotElement.classList.add('unavailable');
                     slotElement.textContent += ' (Booked)';
                 } else {
@@ -548,32 +663,61 @@
         }
 
         // Create calendar event
-        function createCalendarEvent(bookingData) {
-            // In a real implementation, this would use the Google Calendar API
-            const startTime = new Date(bookingData.date);
-            startTime.setHours(bookingData.time, 0, 0, 0);
-            
-            const endTime = new Date(startTime);
-            endTime.setMinutes(endTime.getMinutes() + bookingData.duration);
-            
-            const eventDetails = {
-                summary: `Tutoring Session - ${bookingData.subject}`,
-                description: `Student: ${bookingData.studentName}\nEmail: ${bookingData.studentEmail}\nSubject: ${bookingData.subject}\nNotes: ${bookingData.notes}`,
-                start: startTime,
-                end: endTime,
-                attendees: [bookingData.studentEmail]
-            };
-            
-            // Simulate successful booking
-            showStatus(`Session booked successfully! You'll receive a confirmation email shortly.`, 'success');
-            bookBtn.disabled = false;
-            
-            // Reset form
-            bookingForm.reset();
-            selectedDate = null;
-            selectedTime = null;
-            document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
-            document.querySelector('.duration-option[data-duration="90"]').classList.add('selected');
+        async function createCalendarEvent(bookingData) {
+            try {
+                const startTime = new Date(bookingData.date);
+                startTime.setHours(bookingData.time, 0, 0, 0);
+                
+                const endTime = new Date(startTime);
+                endTime.setMinutes(endTime.getMinutes() + bookingData.duration);
+                
+                const event = {
+                    summary: `Tutoring Session - ${bookingData.subject}`,
+                    description: `Student: ${bookingData.studentName}\nEmail: ${bookingData.studentEmail}\nSubject: ${bookingData.subject}\nNotes: ${bookingData.notes}`,
+                    start: {
+                        dateTime: startTime.toISOString(),
+                        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                    },
+                    end: {
+                        dateTime: endTime.toISOString(),
+                        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                    },
+                    attendees: [
+                        {email: bookingData.studentEmail}
+                    ],
+                    reminders: {
+                        useDefault: false,
+                        overrides: [
+                            {method: 'email', minutes: 24 * 60}, // 1 day before
+                            {method: 'popup', minutes: 30}       // 30 minutes before
+                        ]
+                    }
+                };
+                
+                const response = await gapi.client.calendar.events.insert({
+                    calendarId: 'primary',
+                    resource: event,
+                    sendUpdates: 'all'
+                });
+                
+                console.log('Event created:', response);
+                showStatus(`Session booked successfully! Calendar event created and confirmation emails sent.`, 'success');
+                
+                // Refresh busy times and reset form
+                await loadBusyTimes();
+                bookBtn.disabled = false;
+                bookingForm.reset();
+                selectedDate = null;
+                selectedTime = null;
+                document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+                document.querySelector('.duration-option[data-duration="90"]').classList.add('selected');
+                generateTimeSlots();
+                
+            } catch (error) {
+                console.error('Error creating calendar event:', error);
+                showStatus('Failed to book session. Please try again or contact support.', 'error');
+                bookBtn.disabled = false;
+            }
         }
 
         // Show status message
